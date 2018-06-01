@@ -33,10 +33,11 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'kittivoc_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
-output_dir = 'models/saved_model3'
+pretrained_model = '/home/zjwang/Downloads/VGG_imagenet.npy'
+output_dir = 'models/saved_model4'
 
 start_step = 0
 end_step = 100000

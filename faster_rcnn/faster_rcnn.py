@@ -40,6 +40,9 @@ class RPN(nn.Module):
         self.conv1 = Conv2d(512, 512, 3, same_padding=True)
         self.score_conv = Conv2d(512, len(self.anchor_scales) * 3 * 2, 1, relu=False, same_padding=False)
         self.bbox_conv = Conv2d(512, len(self.anchor_scales) * 3 * 4, 1, relu=False, same_padding=False)
+        # 3 means for each anchor, there are 3 aspect ratios
+        # score_conv is the score for object or background, therefore the *2
+        # bbox_conv generates the coordinate of bbox, therefore the *4
 
         # loss
         self.cross_entropy = None
@@ -51,8 +54,8 @@ class RPN(nn.Module):
 
     def forward(self, im_data, im_info, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
         im_data = network.np_to_variable(im_data, is_cuda=True)
-        im_data = im_data.permute(0, 3, 1, 2)
-        features = self.features(im_data)
+        im_data = im_data.permute(0, 3, 1, 2) # important, image is in N x H x W x C format
+        features = self.features(im_data) # feature is 512 x (H/32) x (W/32), 32 = 2^5 due to 5 poolings
 
         rpn_conv1 = self.conv1(features)
 
@@ -171,6 +174,8 @@ class RPN(nn.Module):
 
 
 class FasterRCNN(nn.Module):
+    '''
+    # PASCAL dataset
     n_classes = 21
     classes = np.asarray(['__background__',
                        'aeroplane', 'bicycle', 'bird', 'boat',
@@ -178,6 +183,14 @@ class FasterRCNN(nn.Module):
                        'cow', 'diningtable', 'dog', 'horse',
                        'motorbike', 'person', 'pottedplant',
                        'sheep', 'sofa', 'train', 'tvmonitor'])
+    '''
+    # KITTI dataset
+    n_classes = 9
+    classes = np.asarray(['Car', 'Van', 'Truck',
+                     'Pedestrian', 'Person_sitting', 'Cyclist', 'Tram',
+                     'Misc', 'DontCare'])    
+                     
+
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
     SCALES = (600,)
     MAX_SIZE = 1000
