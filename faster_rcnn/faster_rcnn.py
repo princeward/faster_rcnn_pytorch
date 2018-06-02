@@ -37,7 +37,7 @@ class RPN(nn.Module):
         super(RPN, self).__init__()
 
         self.features = VGG16(bn=False)
-        self.conv1 = Conv2d(512, 512, 3, same_padding=True)
+        self.conv1 = Conv2d(1024, 512, 3, same_padding=True) # 512
         self.score_conv = Conv2d(512, len(self.anchor_scales) * 3 * 2, 1, relu=False, same_padding=False)
         self.bbox_conv = Conv2d(512, len(self.anchor_scales) * 3 * 4, 1, relu=False, same_padding=False)
         # 3 means for each anchor, there are 3 aspect ratios
@@ -52,12 +52,21 @@ class RPN(nn.Module):
     def loss(self):
         return self.cross_entropy + self.loss_box * 10
 
-    def forward(self, im_data, im_info, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
+    def forward(self, im_data, im_info, disp_data, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
         im_data = network.np_to_variable(im_data, is_cuda=True)
         im_data = im_data.permute(0, 3, 1, 2) # important, image is in N x H x W x C format
+                                              # after permute, it becomes N x C x H x W (standard)
+        disp_data = network.np_to_variable(disp_data, is_cuda=True)
+        disp_data = disp_data.permute(0, 3, 1, 2)
+            
         features = self.features(im_data) # feature is 512 x (H/32) x (W/32), 32 = 2^5 due to 5 poolings
+        
+        features_disp = self.features(disp_data)
+        features_comb = torch.cat((features, features_disp), dim = 1)
+        
 
-        rpn_conv1 = self.conv1(features)
+        # rpn_conv1 = self.conv1(features)
+        rpn_conv1 = self.conv1(features_comb)
 
         # rpn score
         rpn_cls_score = self.score_conv(rpn_conv1)
@@ -224,8 +233,8 @@ class FasterRCNN(nn.Module):
         # print self.rpn.loss_box
         return self.cross_entropy + self.loss_box * 10
 
-    def forward(self, im_data, im_info, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
-        features, rois = self.rpn(im_data, im_info, gt_boxes, gt_ishard, dontcare_areas)
+    def forward(self, im_data, im_info, disp_data, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
+        features, rois = self.rpn(im_data, im_info, disp_data, gt_boxes, gt_ishard, dontcare_areas)
 
         if self.training:
             roi_data = self.proposal_target_layer(rois, gt_boxes, gt_ishard, dontcare_areas, self.n_classes)
@@ -386,6 +395,43 @@ class FasterRCNN(nn.Module):
         blob = im_list_to_blob(processed_ims)
 
         return blob, np.array(im_scale_factors)
+    
+    def get_image_disparity_blob(self, im, disp):
+        """Same as get_image_blob(), but also get disparity
+        """
+        im_orig = im.astype(np.float32, copy=True)
+        im_orig -= self.PIXEL_MEANS
+        disp_orig = im.astype(np.float32, copy=True)
+
+        im_shape = im_orig.shape
+        im_size_min = np.min(im_shape[0:2])
+        im_size_max = np.max(im_shape[0:2])
+
+        processed_ims = []
+        processed_disps = []
+        im_scale_factors = []
+
+        for target_size in self.SCALES:
+            ## process rgb
+            im_scale = float(target_size) / float(im_size_min)
+            # Prevent the biggest axis from being more than MAX_SIZE
+            if np.round(im_scale * im_size_max) > self.MAX_SIZE:
+                im_scale = float(self.MAX_SIZE) / float(im_size_max)
+            im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale,
+                            interpolation=cv2.INTER_LINEAR)
+            im_scale_factors.append(im_scale)
+            processed_ims.append(im)
+            
+            ## process disparity, TODO: substract pixel mean
+            disp = cv2.resize(disp_orig, None, None, fx=im_scale, fy=im_scale,
+                    interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
+            processed_disps.append(disp)
+
+        # Create a blob to hold the input images
+        blob = im_list_to_blob(processed_ims)
+        blob_disp = im_list_to_blob(processed_disps)
+
+        return blob, np.array(im_scale_factors), blob_disp
 
     def load_from_npz(self, params):
         self.rpn.load_from_npz(params)
