@@ -31,9 +31,11 @@ def get_minibatch(roidb, num_classes):
     fg_rois_per_image = np.round(cfg.TRAIN.FG_FRACTION * rois_per_image)
 
     # Get the input image blob, formatted for caffe
-    im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
+    # im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
+    im_blob, im_scales, disp_blob = _get_image_disparity_blob(roidb, random_scale_inds)
 
     blobs = {'data': im_blob}
+    blobs['data_disp'] = disp_blob
 
     if cfg.TRAIN.HAS_RPN:
         assert len(im_scales) == 1, "Single batch only"
@@ -159,6 +161,47 @@ def _get_image_blob(roidb, scale_inds):
     blob = im_list_to_blob(processed_ims)
 
     return blob, im_scales
+
+def _get_image_disparity_blob(roidb, scale_inds):
+    """Based on _get_image_blob(), but also read disparity
+    """
+    num_images = len(roidb)
+    processed_ims = []
+    processed_disps = []
+    im_scales = []
+    for i in xrange(num_images):
+        # process rgb image
+        im = cv2.imread(roidb[i]['image'])
+        if roidb[i]['flipped']:
+            im = im[:, ::-1, :]
+        target_size = cfg.TRAIN.SCALES[scale_inds[i]]
+        im, im_scale = prep_im_for_blob(im, cfg.PIXEL_MEANS, target_size,
+                                        cfg.TRAIN.MAX_SIZE)
+        im_scales.append(im_scale)
+        processed_ims.append(im)
+        # process disparity image
+        folder = roidb[i]['image'][0:-10]
+        img_name = roidb[i]['image'][-10:-3]
+        img_name += 'png'
+        disp_name = folder + 'disparity/' + img_name
+            # assumed disparity maps have same file names, but put in a
+            # folder called "disparity"
+            # example:
+            # -- Whatever directory
+            #   -- 000000.jpg   <--  this is the rgb image
+            #   -- disparity
+            #      -- 000000.jpg   <-- this is the disparity map
+        disp = cv2.imread(disp_name)
+        disp = cv2.resize(disp, None, None, fx=im_scale, fy=im_scale,
+                    interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
+        processed_disps.append(disp)
+        
+
+    # Create a blob to hold the input images
+    blob = im_list_to_blob(processed_ims)
+    blob_disp = im_list_to_blob(processed_disps)
+
+    return blob, im_scales, blob_disp
 
 def _project_im_rois(im_rois, im_scale_factor):
     """Project image RoIs into the rescaled training image."""
