@@ -18,6 +18,7 @@ from network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
 from roi_pooling.modules.roi_pool import RoIPool
 from vgg16 import VGG16
+from disparity16 import Disparity16
 
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
@@ -37,7 +38,8 @@ class RPN(nn.Module):
         super(RPN, self).__init__()
 
         self.features = VGG16(bn=False)
-        self.conv1 = Conv2d(1024, 512, 3, same_padding=True) # 512
+        self.disp_conv = Disparity16(bn=False) 
+        self.conv1 = Conv2d(640, 512, 3, same_padding=True) # 512 (VGG) + 128 (disparity conv) = 640
         self.score_conv = Conv2d(512, len(self.anchor_scales) * 3 * 2, 1, relu=False, same_padding=False)
         self.bbox_conv = Conv2d(512, len(self.anchor_scales) * 3 * 4, 1, relu=False, same_padding=False)
         # 3 means for each anchor, there are 3 aspect ratios
@@ -61,7 +63,7 @@ class RPN(nn.Module):
             
         features = self.features(im_data) # feature is 512 x (H/32) x (W/32), 32 = 2^5 due to 5 poolings
         
-        features_disp = self.features(disp_data)
+        features_disp = self.disp_conv(disp_data)
         features_comb = torch.cat((features, features_disp), dim = 1)
         
 

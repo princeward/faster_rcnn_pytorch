@@ -37,7 +37,7 @@ def log_print(text, color=None, on_color=None, attrs=None):
 imdb_name = 'kittivoc_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 pretrained_model = '/home/zjwang/Downloads/VGG_imagenet.npy'
-output_dir = 'models/saved_model5'
+output_dir = 'models/saved_model6'
 
 start_step = 0
 end_step = 100000

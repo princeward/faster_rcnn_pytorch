@@ -191,9 +191,11 @@ def _get_image_disparity_blob(roidb, scale_inds):
             #   -- 000000.jpg   <--  this is the rgb image
             #   -- disparity
             #      -- 000000.jpg   <-- this is the disparity map
-        disp = cv2.imread(disp_name)
+        disp = cv2.imread(disp_name) # this is a 3-channel, all channels are identical
         disp = cv2.resize(disp, None, None, fx=im_scale, fy=im_scale,
                     interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
+        disp = disp[:,:,0,np.newaxis] # take the first channel, keep dimension
+                                      # result is H x W x 1
         processed_disps.append(disp)
         
 
