@@ -136,7 +136,7 @@ for i in range(num_images):
     
     _t['im_detect'].tic()
     
-    scores, boxes = im_detect(net, im, disp_path)
+    scores, boxes = im_detect(net, im, disp)
     # scores.shape = (300, 4)
     # boxes.shape = (300, 16)
     

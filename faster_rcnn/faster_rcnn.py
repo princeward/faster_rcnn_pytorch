@@ -427,6 +427,8 @@ class FasterRCNN(nn.Module):
             ## process disparity, TODO: substract pixel mean
             disp = cv2.resize(disp_orig, None, None, fx=im_scale, fy=im_scale,
                     interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
+            disp = disp[:,:,0,np.newaxis] # take the first channel, keep dimension
+                                          # result is H x W x 1
             processed_disps.append(disp)
 
         # Create a blob to hold the input images
