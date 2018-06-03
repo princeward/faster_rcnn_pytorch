@@ -23,7 +23,7 @@ from matplotlib import pyplot as plt
 imdb_name = 'kittivoc_val'
 #imdb_name = 'kitti_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-trained_model = 'models/saved_model5/faster_rcnn_90000.h5'
+trained_model = 'models/saved_model6/faster_rcnn_100000.h5'
 
 # rand_seed = 1024
 

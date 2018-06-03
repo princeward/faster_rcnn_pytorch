@@ -429,6 +429,7 @@ class FasterRCNN(nn.Module):
                     interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
             disp = disp[:,:,0,np.newaxis] # take the first channel, keep dimension
                                           # result is H x W x 1
+            disp -= 31.9 # handcoded disparity pixel mean
             processed_disps.append(disp)
 
         # Create a blob to hold the input images

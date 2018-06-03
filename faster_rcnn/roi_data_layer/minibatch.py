@@ -196,6 +196,8 @@ def _get_image_disparity_blob(roidb, scale_inds):
                     interpolation=cv2.INTER_LINEAR) # perform same resize as rgb
         disp = disp[:,:,0,np.newaxis] # take the first channel, keep dimension
                                       # result is H x W x 1
+        disp = disp.astype(np.float32, copy=False)
+        disp -= 31.9 # handcoded disparity pixel mean
         processed_disps.append(disp)
         
 
