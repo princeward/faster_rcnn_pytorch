@@ -73,7 +73,8 @@ class kitti(imdb):
         else:
             prefix = 'training/image_2'
 
-        image_path = os.path.join(self._data_path, prefix, index + self._image_ext)
+        # image_path = os.path.join(self._data_path, prefix, index + self._image_ext) # bug here
+        image_path = os.path.join(self._data_path, prefix, index)
         assert os.path.exists(image_path), \
                 'Path does not exist: {}'.format(image_path)
         return image_path
@@ -95,7 +96,7 @@ class kitti(imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        image_set_file = os.path.join(self._kitti_path, 'training/image_2/')
+        image_set_file = os.path.join(self._data_path, 'training/image_2/')
         assert os.path.exists(image_set_file), \
                 'Path does not exist: {}'.format(image_set_file)
 
