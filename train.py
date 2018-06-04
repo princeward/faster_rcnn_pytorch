@@ -46,7 +46,7 @@ lr_decay = 1./10
 
 rand_seed = 1024
 _DEBUG = True
-use_tensorboard = True
+use_tensorboard = False
 remove_all_log = False   # remove all historical experiments in TensorBoard
 exp_name = None # the previous experiment name in TensorBoard
 
@@ -104,6 +104,11 @@ if use_tensorboard:
         exp = cc.open_experiment(exp_name)
 
 # training
+file_rpn_ce = open(output_dir+'/loss_rpn_ce.txt', 'w')
+file_rpn_box = open(output_dir+'/loss_rpn_box.txt', 'w')
+file_rcnn_ce = open(output_dir+'/loss_rcnn_ce.txt', 'w')
+file_rcnn_box = open(output_dir+'/loss_rcnn_box.txt', 'w')
+
 train_loss = 0
 tp, tf, fg, bg = 0., 0., 0, 0
 step_cnt = 0
@@ -139,6 +144,16 @@ for step in range(start_step, end_step+1):
     loss.backward()
     network.clip_gradient(net, 10.)
     optimizer.step()
+    
+    # log losses to file
+    file_rpn_ce.write(str(net.rpn.cross_entropy.data.cpu().numpy()[0]))
+    file_rpn_ce.write('\n')
+    file_rpn_box.write(str(net.rpn.loss_box.data.cpu().numpy()[0]))
+    file_rpn_box.write('\n')
+    file_rcnn_ce.write(str(net.cross_entropy.data.cpu().numpy()[0]))
+    file_rcnn_ce.write('\n')
+    file_rcnn_box.write(str(net.loss_box.data.cpu().numpy()[0]))
+    file_rcnn_box.write('\n')
 
     if step % disp_interval == 0:
         duration = t.toc(average=False)
@@ -183,3 +198,7 @@ for step in range(start_step, end_step+1):
         t.tic()
         re_cnt = False
 
+file_rpn_ce.close()
+file_rpn_box.close()
+file_rcnn_ce.close()
+file_rcnn_box.close()
