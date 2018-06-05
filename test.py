@@ -20,7 +20,7 @@ from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file, get_output_dir
 imdb_name = 'kittivoc_val'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 # trained_model = 'models/saved_model3/faster_rcnn_90000.h5'
-trained_model = 'models/saved_model4/faster_rcnn_70000.h5'
+trained_model = 'models/saved_model4/faster_rcnn_100000.h5'
 
 rand_seed = 1024
 
