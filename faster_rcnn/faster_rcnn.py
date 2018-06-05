@@ -91,7 +91,7 @@ class RPN(nn.Module):
                                                 im_info, self._feat_stride, self.anchor_scales)
             self.cross_entropy, self.loss_box = self.build_loss(rpn_cls_score_reshape, rpn_bbox_pred, rpn_data)
 
-        return features, rois
+        return features_comb, rois
 
     def build_loss(self, rpn_cls_score_reshape, rpn_bbox_pred, rpn_data):
         # classification loss
@@ -215,7 +215,7 @@ class FasterRCNN(nn.Module):
 
         self.rpn = RPN()
         self.roi_pool = RoIPool(7, 7, 1.0/16)
-        self.fc6 = FC(512 * 7 * 7, 4096)
+        self.fc6 = FC(640 * 7 * 7, 4096)
         self.fc7 = FC(4096, 4096)
         self.score_fc = FC(4096, self.n_classes, relu=False)
         self.bbox_fc = FC(4096, self.n_classes * 4, relu=False)
