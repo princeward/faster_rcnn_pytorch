@@ -18,6 +18,7 @@ from .kitti_tracking import kitti_tracking
 from .nthu import nthu
 from .coco import coco
 from .kittivoc import kittivoc
+from .kittipose import kittipose
 
 
 def _selective_search_IJCV_top_k(split, year, top_k):
@@ -43,6 +44,12 @@ for year in ['2007', '2012', '0712']:
         name = 'kittivoc_{}'.format(split)
         # print name
         __sets[name] = (lambda split=split: kittivoc(split))
+
+    # Set up kittipose
+    for split in ['train', 'val', 'trainval', 'test']:
+        name = 'kittipose_{}'.format(split)
+        # print name
+        __sets[name] = (lambda split=split: kittipose(split))
 
 # # KITTI dataset
 for split in ['train', 'val', 'trainval', 'test']:

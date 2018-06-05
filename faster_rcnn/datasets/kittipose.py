@@ -30,9 +30,9 @@ from ..fast_rcnn.config import cfg
 # <<<< obsolete
 
 
-class kittivoc(imdb):
+class kittipose(imdb):
     def __init__(self, image_set, devkit_path=None):
-        imdb.__init__(self, 'kitti_' + image_set)
+        imdb.__init__(self, 'kittipose_' + image_set)
         self._image_set = image_set
         self._devkit_path = self._get_default_path() if devkit_path is None \
                             else devkit_path
@@ -97,7 +97,7 @@ class kittivoc(imdb):
         """
         Return the default path where PASCAL VOC is expected to be installed.
         """
-        return os.path.join(cfg.DATA_DIR, 'KITTIVOC')
+        return os.path.join(cfg.DATA_DIR, 'KITTIPOSE')
 
     def gt_roidb(self):
         """
@@ -221,6 +221,8 @@ class kittivoc(imdb):
         num_objs = len(objs)
 
         boxes = np.zeros((num_objs, 4), dtype=np.int32)
+        poses = np.zeros((num_objs, 7), dtype=np.float32)
+        #assert poses.dtype == np.float32
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         # just the same as gt_classes
         overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
@@ -240,6 +242,15 @@ class kittivoc(imdb):
             x2 = float(bbox.find('xmax').text) - 1
             y2 = float(bbox.find('ymax').text) - 1
 
+            pose = obj.find('pose')
+            ph = float(pose.find('ph').text)
+            pl = float(pose.find('pl').text)
+            pw = float(pose.find('pw').text)
+            px = float(pose.find('px').text)
+            py = float(pose.find('py').text)
+            pz = float(pose.find('pz').text)
+            pr = float(pose.find('pr').text)
+
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)
             ishards[ix] = difficult
@@ -250,16 +261,20 @@ class kittivoc(imdb):
             if class_name == 'dontcare':
                 dontcare_inds = np.append(dontcare_inds, np.asarray([ix], dtype=np.int32))
                 boxes[ix, :] = [x1, y1, x2, y2]
+                poses[ix, :] = [ph, pl, pw, px, py, pz, pr]
                 continue
             cls = self._class_to_ind[class_name]
             boxes[ix, :] = [x1, y1, x2, y2]
+            poses[ix, :] = [ph, pl, pw, px, py, pz, pr]
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
             seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
 
         # deal with dontcare areas
         dontcare_areas = boxes[dontcare_inds, :]
+        dontcare_poses = poses[dontcare_inds, :]
         boxes = boxes[care_inds, :]
+        poses = poses[care_inds, :]
         gt_classes = gt_classes[care_inds]
         overlaps = overlaps[care_inds, :]
         seg_areas = seg_areas[care_inds]
@@ -268,9 +283,11 @@ class kittivoc(imdb):
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
         return {'boxes' : boxes,
+                'poses' : poses,
                 'gt_classes': gt_classes,
                 'gt_ishard' : ishards,
                 'dontcare_areas' : dontcare_areas,
+                'dontcare_poses' : dontcare_poses,
                 'gt_overlaps' : overlaps,
                 'flipped' : False,
                 'seg_areas' : seg_areas}
@@ -384,6 +401,6 @@ class kittivoc(imdb):
             self.config['cleanup'] = True
 
 if __name__ == '__main__':
-    d = kittivoc('trainval')
+    d = kittipose('trainval')
     res = d.roidb
     from IPython import embed; embed()

@@ -48,7 +48,7 @@ class RPN(nn.Module):
 
         # loss
         self.cross_entropy = None
-        self.los_box = None
+        self.loss_box = None
 
     @property
     def loss(self):
@@ -102,7 +102,7 @@ class RPN(nn.Module):
         rpn_cls_score = torch.index_select(rpn_cls_score, 0, rpn_keep)
         rpn_label = torch.index_select(rpn_label, 0, rpn_keep)
 
-        fg_cnt = torch.sum(rpn_label.data.ne(0))
+        fg_cnt = torch.sum(rpn_label.data.ne(0)).float()
 
         rpn_cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label)
 
@@ -111,7 +111,11 @@ class RPN(nn.Module):
         rpn_bbox_targets = torch.mul(rpn_bbox_targets, rpn_bbox_inside_weights)
         rpn_bbox_pred = torch.mul(rpn_bbox_pred, rpn_bbox_inside_weights)
 
-        rpn_loss_box = F.smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, size_average=False) / (fg_cnt + 1e-4)
+        print fg_cnt.dtype
+
+        rpn_loss_box = F.smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+
+        print rpn_loss_box.dtype
 
         return rpn_cross_entropy, rpn_loss_box
 
@@ -219,10 +223,12 @@ class FasterRCNN(nn.Module):
         self.fc7 = FC(4096, 4096)
         self.score_fc = FC(4096, self.n_classes, relu=False)
         self.bbox_fc = FC(4096, self.n_classes * 4, relu=False)
+        self.pose_fc = FC(4096, 7, relu=False)
 
         # loss
         self.cross_entropy = None
         self.loss_box = None
+        self.loss_pose = None
 
         # for log
         self.debug = debug
@@ -233,13 +239,14 @@ class FasterRCNN(nn.Module):
         # print self.loss_box
         # print self.rpn.cross_entropy
         # print self.rpn.loss_box
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_pose+ self.loss_box * 10
 
-    def forward(self, im_data, im_info, disp_data, gt_boxes=None, gt_ishard=None, dontcare_areas=None):
+    def forward(self, im_data, im_info, disp_data, gt_boxes=None, gt_poses=None, gt_ishard=None, dontcare_areas=None, dontcare_poses=None):
         features, rois = self.rpn(im_data, im_info, disp_data, gt_boxes, gt_ishard, dontcare_areas)
 
         if self.training:
-            roi_data = self.proposal_target_layer(rois, gt_boxes, gt_ishard, dontcare_areas, self.n_classes)
+            roi_data = self.proposal_target_layer(rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses,
+             self.n_classes)
             rois = roi_data[0]
 
         # roi pool
@@ -253,13 +260,14 @@ class FasterRCNN(nn.Module):
         cls_score = self.score_fc(x)
         cls_prob = F.softmax(cls_score)
         bbox_pred = self.bbox_fc(x)
+        pose_pred = self.pose_fc(x)
 
         if self.training:
-            self.cross_entropy, self.loss_box = self.build_loss(cls_score, bbox_pred, roi_data)
+            self.cross_entropy, self.loss_box, self.loss_pose = self.build_loss(cls_score, bbox_pred, pose_pred, roi_data)
 
-        return cls_prob, bbox_pred, rois
+        return cls_prob, bbox_pred, pose_pred, rois
 
-    def build_loss(self, cls_score, bbox_pred, roi_data):
+    def build_loss(self, cls_score, bbox_pred, pose_pred, roi_data):
         # classification loss
         label = roi_data[1].squeeze()
         fg_cnt = torch.sum(label.data.ne(0))
@@ -274,21 +282,28 @@ class FasterRCNN(nn.Module):
             self.bg_cnt = bg_cnt
 
         ce_weights = torch.ones(cls_score.size()[1])
-        ce_weights[0] = float(fg_cnt) / bg_cnt
+        ce_weights[0] = float(fg_cnt) / float(bg_cnt)
         ce_weights = ce_weights.cuda()
         cross_entropy = F.cross_entropy(cls_score, label, weight=ce_weights)
 
         # bounding box regression L1 loss
-        bbox_targets, bbox_inside_weights, bbox_outside_weights = roi_data[2:]
+        bbox_targets, bbox_inside_weights, bbox_outside_weights, pose_targets, pose_weights = roi_data[2:]
         bbox_targets = torch.mul(bbox_targets, bbox_inside_weights)
         bbox_pred = torch.mul(bbox_pred, bbox_inside_weights)
 
-        loss_box = F.smooth_l1_loss(bbox_pred, bbox_targets, size_average=False) / (fg_cnt + 1e-4)
+        loss_box = F.smooth_l1_loss(bbox_pred, bbox_targets, size_average=False) / (float(fg_cnt) + 1e-4)
 
-        return cross_entropy, loss_box
+        pose_targets = torch.mul(pose_targets,pose_weights)
+        pose_pred = torch.mul(pose_pred,pose_weights)
+
+        loss_pose = F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e4)
+
+        print (cross_entropy, loss_box, loss_pose)
+
+        return cross_entropy, loss_box, loss_pose
 
     @staticmethod
-    def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, num_classes):
+    def proposal_target_layer(rpn_rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses, num_classes):
         """
         ----------
         rpn_rois:  (1 x H x W x A, 5) [0, x1, y1, x2, y2]
@@ -306,16 +321,18 @@ class FasterRCNN(nn.Module):
         bbox_outside_weights: (1 x H x W x A, Kx4) 0, 1 masks for the computing loss
         """
         rpn_rois = rpn_rois.data.cpu().numpy()
-        rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights = \
-            proposal_target_layer_py(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, num_classes)
+        rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses, pose_weights = \
+            proposal_target_layer_py(rpn_rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses, num_classes)
         # print labels.shape, bbox_targets.shape, bbox_inside_weights.shape
         rois = network.np_to_variable(rois, is_cuda=True)
         labels = network.np_to_variable(labels, is_cuda=True, dtype=torch.LongTensor)
         bbox_targets = network.np_to_variable(bbox_targets, is_cuda=True)
         bbox_inside_weights = network.np_to_variable(bbox_inside_weights, is_cuda=True)
         bbox_outside_weights = network.np_to_variable(bbox_outside_weights, is_cuda=True)
+        poses = network.np_to_variable(poses, is_cuda=True)
+        pose_weights = network.np_to_variable(pose_weights, is_cuda=True)
 
-        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses, pose_weights
 
     def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, im_shape, nms=True, clip=True, min_score=0.0):
         # find class

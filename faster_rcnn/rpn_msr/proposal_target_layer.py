@@ -22,7 +22,7 @@ from ..fast_rcnn.bbox_transform import bbox_transform
 DEBUG = False
 
 
-def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_classes):
+def proposal_target_layer(rpn_rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses, _num_classes):
     """
     Assign object detection proposals to ground-truth targets. Produces proposal
     classification labels and bounding-box regression targets.
@@ -54,8 +54,10 @@ def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_cl
         assert gt_ishard.shape[0] == gt_boxes.shape[0]
         gt_ishard = gt_ishard.astype(int)
         gt_easyboxes = gt_boxes[gt_ishard != 1, :]
+        gt_easyposes = gt_poses[gt_ishard != 1, :]
     else:
         gt_easyboxes = gt_boxes
+        gt_easyposes = gt_poses
 
     """
     add the ground-truth to rois will cause zero loss! not good for visuallization
@@ -75,8 +77,8 @@ def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_cl
 
     # Sample rois with classification labels and bounding box regression
     # targets
-    labels, rois, bbox_targets, bbox_inside_weights = _sample_rois(
-        all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_image,
+    labels, rois, bbox_targets, bbox_inside_weights, poses, pose_weights = _sample_rois(
+        all_rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses, fg_rois_per_image,
         rois_per_image, _num_classes)
 
     _count = 1
@@ -99,10 +101,13 @@ def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_cl
 
     bbox_outside_weights = np.array(bbox_inside_weights > 0).astype(np.float32)
 
-    return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+    poses = poses.reshape(-1,7)
+    pose_weights = pose_weights.reshape(-1,7)
+
+    return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses, pose_weights
 
 
-def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_image, rois_per_image, num_classes):
+def _sample_rois(all_rois, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses, fg_rois_per_image, rois_per_image, num_classes):
     """Generate a random sample of RoIs comprising foreground and background
     examples.
     """
@@ -113,6 +118,7 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
     gt_assignment = overlaps.argmax(axis=1)  # R
     max_overlaps = overlaps.max(axis=1)  # R
     labels = gt_boxes[gt_assignment, 4]
+    poses = gt_poses[gt_assignment,:]
 
     # preclude hard samples
     ignore_inds = np.empty(shape=(0), dtype=int)
@@ -177,6 +183,11 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
     keep_inds = np.append(fg_inds, bg_inds)
     # Select sampled values from various arrays:
     labels = labels[keep_inds]
+    poses = poses[keep_inds]
+
+    pose_weights = np.zeros(poses.shape, dtype=np.float32)
+    inds = np.where(labels > 0)[0]
+    pose_weights[inds, :] = cfg.TRAIN.POSE_WEIGHTS
     # Clamp labels for the background RoIs to 0
     labels[fg_rois_per_this_image:] = 0
     rois = all_rois[keep_inds]
@@ -190,7 +201,7 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
     bbox_targets, bbox_inside_weights = \
         _get_bbox_regression_labels(bbox_target_data, num_classes)
 
-    return labels, rois, bbox_targets, bbox_inside_weights
+    return labels, rois, bbox_targets, bbox_inside_weights, poses, pose_weights
 
 
 def _get_bbox_regression_labels(bbox_target_data, num_classes):
