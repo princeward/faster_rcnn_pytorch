@@ -34,10 +34,10 @@ def log_print(text, color=None, on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 #imdb_name = 'voc_2007_trainval'
-imdb_name = 'kittivoc_train'
+imdb_name = 'kittipose_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-pretrained_model = '/home/zjwang/Downloads/VGG_imagenet.npy'
-output_dir = 'models/saved_model7'
+pretrained_model = '/home/pculbert/Documents/faster_rcnn_pytorch/VGG_imagenet.npy'
+output_dir = 'models/saved_pose_model1'
 
 start_step = 0
 end_step = 100000
@@ -108,6 +108,7 @@ file_rpn_ce = open(output_dir+'/loss_rpn_ce.txt', 'w')
 file_rpn_box = open(output_dir+'/loss_rpn_box.txt', 'w')
 file_rcnn_ce = open(output_dir+'/loss_rcnn_ce.txt', 'w')
 file_rcnn_box = open(output_dir+'/loss_rcnn_box.txt', 'w')
+file_rcnn_pose = open(output_dir+'/loss_rcnn_pose.txt', 'w')
 
 train_loss = 0
 tp, tf, fg, bg = 0., 0., 0, 0
@@ -119,43 +120,50 @@ for step in range(start_step, end_step+1):
 
     # get one batch
     blobs = data_layer.forward()
-    im_data = blobs['data']
-    im_info = blobs['im_info']
-    gt_boxes = blobs['gt_boxes']
+    im_data = blobs['data'] # one image, shape = (1, H, W, 3)
+    im_info = blobs['im_info'] # stores H, W, scale
+    gt_boxes = blobs['gt_boxes'] # groundtruth boxes
+    gt_poses = blobs['gt_poses']
     gt_ishard = blobs['gt_ishard']
     dontcare_areas = blobs['dontcare_areas']
+    dontcare_poses = blobs['dontcare_poses']
     disp_data = blobs['data_disp'] # disparity map
+    
+    '''
 
     # forward
-    net(im_data, im_info, disp_data, gt_boxes, gt_ishard, dontcare_areas)
+    #net(im_data, im_info, disp_data, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses)
     loss = net.loss + net.rpn.loss
 
-    if _DEBUG:
-        tp += float(net.tp)
-        tf += float(net.tf)
-        fg += net.fg_cnt
-        bg += net.bg_cnt
+    #if _DEBUG:
+        #tp += float(net.tp)
+        #tf += float(net.tf)
+        #fg += net.fg_cnt
+        #bg += net.bg_cnt
 
-    train_loss += loss.data[0]
-    step_cnt += 1
+    #train_loss += loss.data[0]
+    #step_cnt += 1
 
     # backward
-    optimizer.zero_grad()
-    loss.backward()
-    network.clip_gradient(net, 10.)
-    optimizer.step()
+    #optimizer.zero_grad()
+    #loss.backward()
+    #network.clip_gradient(net, 10.)
+    #optimizer.step()
     
     # log losses to file
-    file_rpn_ce.write(str(net.rpn.cross_entropy.data.cpu().numpy()[0]))
+    file_rpn_ce.write(str(net.rpn.cross_entropy.data.cpu().numpy()))
     file_rpn_ce.write('\n')
-    file_rpn_box.write(str(net.rpn.loss_box.data.cpu().numpy()[0]))
+    file_rpn_box.write(str(net.rpn.loss_box.data.cpu().numpy()))
     file_rpn_box.write('\n')
-    file_rcnn_ce.write(str(net.cross_entropy.data.cpu().numpy()[0]))
+    file_rcnn_ce.write(str(net.cross_entropy.data.cpu().numpy()))
     file_rcnn_ce.write('\n')
-    file_rcnn_box.write(str(net.loss_box.data.cpu().numpy()[0]))
+    file_rcnn_box.write(str(net.loss_box.data.cpu().numpy()))
     file_rcnn_box.write('\n')
+    file_rcnn_pose.write(str(net.loss_pose.data.cpu().numpy()))
+    file_rcnn_pose.write('\n')
 
     if step % disp_interval == 0:
+    #if step % 1 == 0:
         duration = t.toc(average=False)
         fps = step_cnt / duration
 
@@ -164,10 +172,10 @@ for step in range(start_step, end_step+1):
         log_print(log_text, color='green', attrs=['bold'])
 
         if _DEBUG:
-            log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
-            log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
-                net.rpn.cross_entropy.data.cpu().numpy()[0], net.rpn.loss_box.data.cpu().numpy()[0],
-                net.cross_entropy.data.cpu().numpy()[0], net.loss_box.data.cpu().numpy()[0])
+            #log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/float(fg*100.), tf/float(bg*100.), fg/float(step_cnt), bg/float(step_cnt)))
+            log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, rcnn_pose: %.4f' % (
+                net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
+                net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), net.loss_pose.data.cpu().numpy())
             )
         re_cnt = True
 
@@ -175,12 +183,13 @@ for step in range(start_step, end_step+1):
         exp.add_scalar_value('train_loss', train_loss / step_cnt, step=step)
         exp.add_scalar_value('learning_rate', lr, step=step)
         if _DEBUG:
-            exp.add_scalar_value('true_positive', tp/fg*100., step=step)
-            exp.add_scalar_value('true_negative', tf/bg*100., step=step)
-            losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()[0]),
-                      'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()[0]),
-                      'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()[0]),
-                      'rcnn_box': float(net.loss_box.data.cpu().numpy()[0])}
+           # exp.add_scalar_value('true_positive', tp/float(fg*100.), step=step)
+            #exp.add_scalar_value('true_negative', tf/float(bg*100.), step=step)
+            losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()),
+                      'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()),
+                      'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()),
+                      'rcnn_box': float(net.loss_box.data.cpu().numpy()),
+                      'rcnn_pose': float(net.loss_pose.data.cpu().numpy())}
             exp.add_scalar_dict(losses, step=step)
 
     if (step % 10000 == 0) and step > 0:
@@ -192,13 +201,16 @@ for step in range(start_step, end_step+1):
         optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
 
     if re_cnt:
-        tp, tf, fg, bg = 0., 0., 0, 0
+        #tp, tf, fg, bg = 0., 0., 0, 0
         train_loss = 0
         step_cnt = 0
         t.tic()
         re_cnt = False
-
+        
+    '''
+        
 file_rpn_ce.close()
 file_rpn_box.close()
 file_rcnn_ce.close()
 file_rcnn_box.close()
+file_rcnn_pose.close()

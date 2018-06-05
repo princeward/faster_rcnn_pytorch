@@ -111,11 +111,11 @@ class RPN(nn.Module):
         rpn_bbox_targets = torch.mul(rpn_bbox_targets, rpn_bbox_inside_weights)
         rpn_bbox_pred = torch.mul(rpn_bbox_pred, rpn_bbox_inside_weights)
 
-        print fg_cnt.dtype
+        #print fg_cnt.dtype
 
         rpn_loss_box = F.smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, size_average=False) / (float(fg_cnt) + 1e-4)
 
-        print rpn_loss_box.dtype
+        #print rpn_loss_box.dtype
 
         return rpn_cross_entropy, rpn_loss_box
 
@@ -261,6 +261,8 @@ class FasterRCNN(nn.Module):
         cls_prob = F.softmax(cls_score)
         bbox_pred = self.bbox_fc(x)
         pose_pred = self.pose_fc(x)
+        
+        del pooled_features
 
         if self.training:
             self.cross_entropy, self.loss_box, self.loss_pose = self.build_loss(cls_score, bbox_pred, pose_pred, roi_data)
@@ -296,9 +298,9 @@ class FasterRCNN(nn.Module):
         pose_targets = torch.mul(pose_targets,pose_weights)
         pose_pred = torch.mul(pose_pred,pose_weights)
 
-        loss_pose = F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e4)
+        loss_pose = 1e-4*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
 
-        print (cross_entropy, loss_box, loss_pose)
+        #print (cross_entropy, loss_box, loss_pose)
 
         return cross_entropy, loss_box, loss_pose
 
