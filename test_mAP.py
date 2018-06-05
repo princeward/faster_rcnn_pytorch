@@ -23,7 +23,7 @@ from matplotlib import pyplot as plt
 imdb_name = 'kittivoc_val'
 #imdb_name = 'kitti_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-trained_model = 'models/saved_model6/faster_rcnn_100000.h5'
+trained_model = 'models/saved_model7/faster_rcnn_100000.h5'
 
 # rand_seed = 1024
 
@@ -181,5 +181,5 @@ for i in range(num_images):
         plt.imshow(im2show)
         #pass
     
-    print 'Evaluating detections'
-    imdb.evaluate_detections(all_boxes, output_dir)
+print 'Evaluating detections'
+imdb.evaluate_detections(all_boxes, output_dir)
