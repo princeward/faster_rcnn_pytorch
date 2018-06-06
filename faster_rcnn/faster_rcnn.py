@@ -298,7 +298,7 @@ class FasterRCNN(nn.Module):
         pose_targets = torch.mul(pose_targets,pose_weights)
         pose_pred = torch.mul(pose_pred,pose_weights)
 
-        loss_pose = 1e-4*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+        loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
 
         #print (cross_entropy, loss_box, loss_pose)
 

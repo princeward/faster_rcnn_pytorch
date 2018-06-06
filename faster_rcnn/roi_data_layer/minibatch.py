@@ -46,7 +46,7 @@ def get_minibatch(roidb, num_classes):
         gt_boxes[:, 0:4] = roidb[0]['boxes'][gt_inds, :] * im_scales[0]
         gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
         blobs['gt_boxes'] = gt_boxes
-        blobs['gt_poses'] = roidb[0]['poses'][gt_inds,:]
+        blobs['gt_poses'] = (roidb[0]['poses'][gt_inds,:]-cfg.POSE_MEANS)*cfg.POSE_INV_VARS
         blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]  \
             if 'gt_ishard' in roidb[0] else np.zeros(gt_inds.size, dtype=int)
         # blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]

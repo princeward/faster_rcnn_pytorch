@@ -255,6 +255,12 @@ __C.USE_GPU_NMS = True
 # Default GPU device id
 __C.GPU_ID = 0
 
+# Center poses for training
+__C.POSE_MEANS = [1.5665623, 1.4539267, 3.3884678, -1.9117088, 1.6658825, 26.48486, -0.08288366]
+
+#Scale all poses so they have unit variance
+__C.POSE_INV_VARS = [6.306227, 2.5519905, 0.86918765, 0.12308451, 2.565775, 0.06223914, 0.5806456 ]
+
 
 def get_output_dir(imdb, weights_filename):
     """Return the directory where experimental artifacts are placed.
