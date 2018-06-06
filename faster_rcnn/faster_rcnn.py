@@ -102,7 +102,7 @@ class RPN(nn.Module):
         rpn_cls_score = torch.index_select(rpn_cls_score, 0, rpn_keep)
         rpn_label = torch.index_select(rpn_label, 0, rpn_keep)
 
-        fg_cnt = torch.sum(rpn_label.data.ne(0)).float()
+        fg_cnt = torch.sum(rpn_label.data.ne(0))
 
         rpn_cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label)
 

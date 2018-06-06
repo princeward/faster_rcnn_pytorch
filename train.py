@@ -36,7 +36,7 @@ def log_print(text, color=None, on_color=None, attrs=None):
 #imdb_name = 'voc_2007_trainval'
 imdb_name = 'kittipose_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-pretrained_model = '/home/pculbert/Documents/faster_rcnn_pytorch/VGG_imagenet.npy'
+pretrained_model = '/home/zjwang/Downloads/VGG_imagenet.npy'
 output_dir = 'models/saved_pose_model1'
 
 start_step = 0
@@ -128,27 +128,25 @@ for step in range(start_step, end_step+1):
     dontcare_areas = blobs['dontcare_areas']
     dontcare_poses = blobs['dontcare_poses']
     disp_data = blobs['data_disp'] # disparity map
-    
-    '''
 
     # forward
-    #net(im_data, im_info, disp_data, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses)
+    net(im_data, im_info, disp_data, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses)
     loss = net.loss + net.rpn.loss
 
-    #if _DEBUG:
-        #tp += float(net.tp)
-        #tf += float(net.tf)
-        #fg += net.fg_cnt
-        #bg += net.bg_cnt
+    if _DEBUG:
+        tp += float(net.tp)
+        tf += float(net.tf)
+        fg += net.fg_cnt
+        bg += net.bg_cnt
 
-    #train_loss += loss.data[0]
-    #step_cnt += 1
+    train_loss += loss.data[0]
+    step_cnt += 1
 
     # backward
-    #optimizer.zero_grad()
-    #loss.backward()
-    #network.clip_gradient(net, 10.)
-    #optimizer.step()
+    optimizer.zero_grad()
+    loss.backward()
+    network.clip_gradient(net, 10.)
+    optimizer.step()
     
     # log losses to file
     file_rpn_ce.write(str(net.rpn.cross_entropy.data.cpu().numpy()))
@@ -172,7 +170,7 @@ for step in range(start_step, end_step+1):
         log_print(log_text, color='green', attrs=['bold'])
 
         if _DEBUG:
-            #log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/float(fg*100.), tf/float(bg*100.), fg/float(step_cnt), bg/float(step_cnt)))
+            log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/float(fg*100.), tf/float(bg*100.), fg/float(step_cnt), bg/float(step_cnt)))
             log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, rcnn_pose: %.4f' % (
                 net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
                 net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), net.loss_pose.data.cpu().numpy())
@@ -206,8 +204,6 @@ for step in range(start_step, end_step+1):
         step_cnt = 0
         t.tic()
         re_cnt = False
-        
-    '''
         
 file_rpn_ce.close()
 file_rpn_box.close()
