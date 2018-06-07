@@ -226,10 +226,7 @@ class FasterRCNN(nn.Module):
         
         self.fc_pose = FC(640*7*7,1000)
         self.fc_inner = FC(1000,1000)
-        self.fc_3d_boxes = FC(1000,360)
-        self.fc_3d_orient = FC(1000, 60, tanh=True)
-        self._3dbox_fc = FC(360, 6, relu=False)
-        self._3dorient_fc = FC(60,1, relu=False)
+        self.pose_fc = FC(1000,7)
 
         # loss
         self.cross_entropy = None
@@ -264,10 +261,9 @@ class FasterRCNN(nn.Module):
         y = F.dropout(y,training=self.training)
         y = self.fc_inner(y)
         y = F.dropout(y,training=self.training)
-        y_box = self.fc_3d_boxes(y)
-        y_box = F.dropout(y_box, training=self.training)
-        y_orient = self.fc_3d_orient(y)
-        y_orient = F.dropout(y_orient, training=self.training)
+        y = self.fc_inner(y)
+        y = F.dropout(y,training=self.training)
+        
         
         x = self.fc6(x)
         x = F.dropout(x, training=self.training)
@@ -277,9 +273,7 @@ class FasterRCNN(nn.Module):
         cls_score = self.score_fc(x)
         cls_prob = F.softmax(cls_score)
         bbox_pred = self.bbox_fc(x)
-        _3dbox_pred = self._3dbox_fc(y_box)
-        _3dorient_pred = self._3dorient_fc(y_orient)
-        pose_pred = torch.cat((_3dbox_pred,_3dorient_pred),1) #concatenate again for full pose estimation
+        pose_pred = self.pose_fc(y)
         
         del pooled_features
 
@@ -317,7 +311,7 @@ class FasterRCNN(nn.Module):
         pose_targets = torch.mul(pose_targets,pose_weights)
         pose_pred = torch.mul(pose_pred,pose_weights)
 
-        loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+        loss_pose = 5e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
 
         #print (cross_entropy, loss_box, loss_pose)
 

@@ -37,7 +37,7 @@ def log_print(text, color=None, on_color=None, attrs=None):
 imdb_name = 'kittipose_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 pretrained_model = '/home/pculbert/Documents/faster_rcnn_pytorch/VGG_imagenet.npy'
-output_dir = 'trained_models/saved_pose_model_p0'
+output_dir = 'trained_models/saved_pose_model_p2'
 
 start_step = 0
 end_step = 100000
