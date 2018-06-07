@@ -22,15 +22,18 @@ class Conv2d(nn.Module):
 
 
 class FC(nn.Module):
-    def __init__(self, in_features, out_features, relu=True):
+    def __init__(self, in_features, out_features, relu=True, tanh=False):
         super(FC, self).__init__()
         self.fc = nn.Linear(in_features, out_features)
         self.relu = nn.ReLU(inplace=True) if relu else None
+        self.tanh = nn.Hardtanh(inplace=True) if tanh else None
 
     def forward(self, x):
         x = self.fc(x)
         if self.relu is not None:
             x = self.relu(x)
+        if self.tanh is not None:
+            x = self.tanh(x)
         return x
 
 
