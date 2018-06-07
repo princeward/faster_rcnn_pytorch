@@ -88,9 +88,9 @@ class FasterRCNN(nn.Module):
         # roi pool
         pooled_features = self.roi_pool(features, rois)
         x = pooled_features.view(pooled_features.size()[0], -1)
+        feature_ret = x
         x = self.fc6(x)
         x = F.dropout(x, training=self.training)
-        feature_ret = x
         x = self.fc7(x)
         x = F.dropout(x, training=self.training)
 
@@ -305,8 +305,9 @@ class PoseNet(nn.Module):
         super(PoseNet, self).__init__()
         self.frcnn = FasterRCNN(classes, debug)
         network.set_trainable(self.frcnn, requires_grad=False)
-        self.fc_pose_1 = FC(4096, 4096)
-        self.fc_pose_2 = FC(4096, 7, relu=False)
+        self.fc_pose_1 = FC(640 * 7 * 7, 4096)
+        self.fc_pose_2 = FC(4096, 4096)
+        self.fc_pose_3 = FC(4096, 7, relu=False)
         
     
     def forward(self, im_data, im_info, disp_data, 
@@ -316,7 +317,11 @@ class PoseNet(nn.Module):
                 self.frcnn(im_data, im_info, disp_data, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses)
         
         pose_pred = self.fc_pose_1(feature_frcnn)
+        pose_pred = F.dropout(pose_pred, training=self.training)
         pose_pred = self.fc_pose_2(pose_pred)
+        pose_pred = F.dropout(pose_pred, training=self.training)
+        
+        pose_pred = self.fc_pose_3(pose_pred)
         
         if self.training:
             self.loss_pose = self.build_loss(cls_score, pose_pred, roi_data)
@@ -354,7 +359,8 @@ class PoseNet(nn.Module):
         pose_targets = torch.mul(pose_targets,pose_weights)
         pose_pred = torch.mul(pose_pred,pose_weights)
 
-        loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+        # loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+        loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1)
 
         # return cross_entropy, loss_box, loss_pose
         return loss_pose
