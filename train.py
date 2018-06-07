@@ -40,7 +40,7 @@ pretrained_model = '/home/pculbert/Documents/faster_rcnn_pytorch/VGG_imagenet.np
 output_dir = 'trained_models/saved_pose_model_p2'
 
 start_step = 0
-end_step = 100000
+end_step = 20000
 lr_decay_steps = {60000, 80000}
 lr_decay = 1./10
 
