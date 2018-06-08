@@ -306,6 +306,7 @@ class PoseNet(nn.Module):
         super(PoseNet, self).__init__()
         self.frcnn = FasterRCNN(classes, debug)
         network.set_trainable(self.frcnn, requires_grad=False)
+
         self.fc_pose_1 = FC(640*7*7+16, 1000)
         self.fc_pose_2 = FC(1000,1000)
         self.fc_pose_out = FC(1000, 7, relu=False)
