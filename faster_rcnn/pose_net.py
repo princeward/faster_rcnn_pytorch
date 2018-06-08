@@ -13,6 +13,8 @@ from rpn_msr.anchor_target_layer import anchor_target_layer as anchor_target_lay
 from rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
 from fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
+from fast_rcnn.config import cfg
+
 import network
 from network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
@@ -161,7 +163,6 @@ class FasterRCNN(nn.Module):
         bbox_inside_weights = network.np_to_variable(bbox_inside_weights, is_cuda=True)
         bbox_outside_weights = network.np_to_variable(bbox_outside_weights, is_cuda=True)
         poses = network.np_to_variable(poses, is_cuda=True)
-        pose_weights = network.np_to_variable(pose_weights, is_cuda=True)
 
         return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, poses, pose_weights
 
@@ -305,9 +306,11 @@ class PoseNet(nn.Module):
         super(PoseNet, self).__init__()
         self.frcnn = FasterRCNN(classes, debug)
         network.set_trainable(self.frcnn, requires_grad=False)
-        self.fc_pose_1 = FC(640 * 7 * 7, 4096)
-        self.fc_pose_2 = FC(4096, 4096)
-        self.fc_pose_3 = FC(4096, 7, relu=False)
+
+        self.fc_pose_1 = FC(640*7*7+16, 1000)
+        self.fc_pose_2 = FC(1000,1000)
+        self.fc_pose_out = FC(1000, 7, relu=False)
+        self.debug = debug
         
     
     def forward(self, im_data, im_info, disp_data, 
@@ -316,33 +319,44 @@ class PoseNet(nn.Module):
         cls_prob, cls_score, bbox_pred, rois, roi_data, feature_frcnn = \
                 self.frcnn(im_data, im_info, disp_data, gt_boxes, gt_poses, gt_ishard, dontcare_areas, dontcare_poses)
         
-        pose_pred = self.fc_pose_1(feature_frcnn)
+        pose_pred = self.fc_pose_1(torch.cat((feature_frcnn,bbox_pred),1)) #concatenate ROI feats + boxes
         pose_pred = F.dropout(pose_pred, training=self.training)
         pose_pred = self.fc_pose_2(pose_pred)
         pose_pred = F.dropout(pose_pred, training=self.training)
-        
-        pose_pred = self.fc_pose_3(pose_pred)
+        pose_pred = self.fc_pose_2(pose_pred)
+        pose_pred = F.dropout(pose_pred, training=self.training)
+        pose_pred = self.fc_pose_out(pose_pred)
         
         if self.training:
-            self.loss_pose = self.build_loss(cls_score, pose_pred, roi_data)
+            self.loss_pose = self.build_loss(cls_prob, gt_boxes, pose_pred, roi_data)
             
         return cls_prob, bbox_pred, rois, pose_pred
     
-    def build_loss(self, cls_score, pose_pred, roi_data):
+    def build_loss(self, cls_prob, gt_boxes, pose_pred, roi_data):
+        obj_cnt = np.sum(np.not_equal(gt_boxes[:,4],np.zeros(1)))
         pose_targets = roi_data[5]
-        pose_weights = roi_data[6]
+        
+        pose_weights = np.zeros(pose_pred.shape,dtype=np.float32)
+        probs = cls_prob.data.cpu().numpy()
+        
+        target_inds = np.where(np.logical_and(np.amax(probs,axis=1)>=cfg.TEST.BOX_THRESH,np.argmax(probs,axis=1)!=0))[0]
+        
+        pose_weights[target_inds,:] = cfg.TRAIN.POSE_WEIGHTS
+        
+        pose_weights = network.np_to_variable(pose_weights, is_cuda=True)
+        #pose_weights = roi_data[6]
         # classification loss
         label = roi_data[1].squeeze()
         fg_cnt = torch.sum(label.data.ne(0))
         bg_cnt = label.data.numel() - fg_cnt
 
         # for log
-        #if self.debug:
-        maxv, predict = cls_score.data.max(1)
-        self.tp = torch.sum(predict[:fg_cnt].eq(label.data[:fg_cnt])) if fg_cnt > 0 else 0
-        self.tf = torch.sum(predict[fg_cnt:].eq(label.data[fg_cnt:]))
-        self.fg_cnt = fg_cnt
-        self.bg_cnt = bg_cnt
+        if self.debug:
+            maxv, predict = cls_prob.data.max(1)
+            self.tp = torch.sum(predict[:fg_cnt].eq(label.data[:fg_cnt])) if fg_cnt > 0 else 0
+            self.tf = torch.sum(predict[fg_cnt:].eq(label.data[fg_cnt:]))
+            self.fg_cnt = fg_cnt
+            self.bg_cnt = bg_cnt
         
         #ce_weights = torch.ones(cls_score.size()[1])
         #ce_weights[0] = float(fg_cnt) / float(bg_cnt)
@@ -355,12 +369,14 @@ class PoseNet(nn.Module):
         #bbox_pred = torch.mul(bbox_pred, bbox_inside_weights)
 
         #loss_box = F.smooth_l1_loss(bbox_pred, bbox_targets, size_average=False) / (float(fg_cnt) + 1e-4)
+        
 
         pose_targets = torch.mul(pose_targets,pose_weights)
+        #print pose_targets
         pose_pred = torch.mul(pose_pred,pose_weights)
+        #print pose_pred
 
-        # loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1e-4)
-        loss_pose = 1e-2*F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(fg_cnt) + 1)
+        loss_pose = F.smooth_l1_loss(pose_pred,pose_targets, size_average=False) / (float(obj_cnt)) if obj_cnt > 0 else 0
 
         # return cross_entropy, loss_box, loss_pose
         return loss_pose
